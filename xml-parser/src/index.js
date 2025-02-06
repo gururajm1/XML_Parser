@@ -12,9 +12,17 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const mongoose_1 = __importDefault(require("mongoose"));
+const multer_1 = __importDefault(require("multer"));
 const fs_1 = __importDefault(require("fs"));
 const xml2js_1 = __importDefault(require("xml2js"));
-const mongoose_1 = __importDefault(require("mongoose"));
+const cors_1 = __importDefault(require("cors"));
+const app = (0, express_1.default)();
+app.use((0, cors_1.default)());
+app.use((0, cors_1.default)({
+    origin: 'http://localhost:3000' // or your frontend URL
+}));
 // MongoDB Schema
 const creditAccountSchema = new mongoose_1.default.Schema({
     bank: String,
@@ -43,11 +51,9 @@ const creditReportSchema = new mongoose_1.default.Schema({
     createdAt: {
         type: Date,
         default: Date.now,
-    }
+    },
 });
-// MongoDB Model
 const CreditReport = mongoose_1.default.model('CreditReport', creditReportSchema);
-// Function to format address
 const formatAddress = (addressDetails) => {
     if (!addressDetails)
         return 'N/A';
@@ -58,39 +64,34 @@ const formatAddress = (addressDetails) => {
         addressDetails.City_non_normalized,
         addressDetails.State_non_normalized,
         addressDetails.ZIP_Postal_Code_non_normalized,
-        addressDetails.CountryCode_non_normalized
-    ].filter(component => component && component !== '');
+        addressDetails.CountryCode_non_normalized,
+    ].filter((component) => component && component !== '');
     return components.join(', ');
 };
-// MongoDB Atlas connection string
-const MONGODB_URI = 'mongodb+srv://gururajm1:gururajjj@cluster0.udttf.mongodb.net/';
-// Main function to process XML and save to MongoDB
-function processXMLAndSaveToMongoDB() {
+// Initialize Express and configure middleware
+//const app = express();
+app.use(express_1.default.json());
+// Configure multer for file uploads
+const upload = (0, multer_1.default)({ dest: 'uploads/' });
+// MongoDB connection
+mongoose_1.default.connect('mongodb+srv://gururajm1:gururajjj@cluster0.udttf.mongodb.net/user')
+    .then(() => console.log('Connected to MongoDB Atlas'))
+    .catch((error) => console.error('MongoDB connection error:', error));
+// Process XML and save to MongoDB
+function processXMLAndSaveToMongoDB(filePath) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y;
         try {
-            // Connect to MongoDB Atlas with options
-            yield mongoose_1.default.connect(MONGODB_URI, {
-            // These options are included by default in newer versions of Mongoose
-            // but explicitly stating them for clarity
-            // useNewUrlParser: true,
-            //   useUnifiedTopology: true,
-            });
-            console.log('Connected to MongoDB Atlas');
-            // Read XML file
-            const xmlData = yield fs_1.default.promises.readFile('./data/example.xml', 'utf-8');
-            // Parse XML
+            const xmlData = yield fs_1.default.promises.readFile(filePath, 'utf-8');
             const parser = new xml2js_1.default.Parser({ explicitArray: false });
             const result = yield parser.parseStringPromise(xmlData);
             const profileResponse = result.INProfileResponse;
             if (!profileResponse) {
                 throw new Error('Invalid XML structure: INProfileResponse not found');
             }
-            // Extract data
             const currentApplicant = (_b = (_a = profileResponse.Current_Application) === null || _a === void 0 ? void 0 : _a.Current_Application_Details) === null || _b === void 0 ? void 0 : _b.Current_Applicant_Details;
             const caisAccounts = (_c = profileResponse.CAIS_Account) === null || _c === void 0 ? void 0 : _c.CAIS_Account_DETAILS;
             const accountList = Array.isArray(caisAccounts) ? caisAccounts : caisAccounts ? [caisAccounts] : [];
-            // Prepare credit report data
             const creditReport = {
                 basicInfo: {
                     name: `${(currentApplicant === null || currentApplicant === void 0 ? void 0 : currentApplicant.First_Name) || ''} ${(currentApplicant === null || currentApplicant === void 0 ? void 0 : currentApplicant.Last_Name) || ''}`.trim(),
@@ -115,24 +116,43 @@ function processXMLAndSaveToMongoDB() {
                     address: formatAddress(account.CAIS_Holder_Address_Details),
                 })),
             };
-            // Save to MongoDB
             const newCreditReport = new CreditReport(creditReport);
             yield newCreditReport.save();
-            console.log('Credit report saved successfully!');
-            console.log('Document ID:', newCreditReport._id);
-            // Optional: Print saved data
-            console.log('\nSaved Credit Report:');
-            console.log(JSON.stringify(creditReport, null, 2));
+            // Clean up uploaded file
+            yield fs_1.default.promises.unlink(filePath);
+            console.log('Credit report saved successfully:', newCreditReport._id);
         }
         catch (error) {
-            console.error('Error:', error);
-        }
-        finally {
-            // Close MongoDB connection
-            yield mongoose_1.default.connection.close();
-            console.log('MongoDB connection closed');
+            console.error('Error processing XML:', error);
+            throw error;
         }
     });
 }
-// Run the main function
-processXMLAndSaveToMongoDB();
+// Upload endpoint with proper typing
+app.post('/api/upload-xml', upload.single('file'), (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        if (!((_a = req.file) === null || _a === void 0 ? void 0 : _a.path)) {
+            res.status(400).json({ message: 'No file uploaded' });
+            return;
+        }
+        yield processXMLAndSaveToMongoDB(req.file.path);
+        res.status(200).json({ message: 'File processed and saved successfully' });
+    }
+    catch (error) {
+        next(error);
+    }
+}));
+// Error handler
+app.use((error, req, res, next) => {
+    console.error('Error:', error);
+    res.status(500).json({
+        message: 'Internal server error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+    });
+});
+// Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});

@@ -1,6 +1,17 @@
+import express, { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
+import multer from 'multer';
 import fs from 'fs';
 import xml2js from 'xml2js';
-import mongoose from 'mongoose';
+import cors from 'cors';
+const app = express();
+app.use(cors());
+
+
+app.use(cors({
+  origin: 'http://localhost:3000' // or your frontend URL
+}));
+
 
 // Types
 interface CreditAccount {
@@ -59,16 +70,13 @@ const creditReportSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now,
-  }
+  },
 });
 
-// MongoDB Model
 const CreditReport = mongoose.model('CreditReport', creditReportSchema);
 
-// Function to format address
 const formatAddress = (addressDetails: any): string => {
   if (!addressDetails) return 'N/A';
-  
   const components = [
     addressDetails.First_Line_Of_Address_non_normalized,
     addressDetails.Second_Line_Of_Address_non_normalized,
@@ -76,47 +84,39 @@ const formatAddress = (addressDetails: any): string => {
     addressDetails.City_non_normalized,
     addressDetails.State_non_normalized,
     addressDetails.ZIP_Postal_Code_non_normalized,
-    addressDetails.CountryCode_non_normalized
-  ].filter(component => component && component !== '');
-  
+    addressDetails.CountryCode_non_normalized,
+  ].filter((component) => component && component !== '');
   return components.join(', ');
 };
 
-// MongoDB Atlas connection string
-const MONGODB_URI = 'mongodb+srv://gururajm1:gururajjj@cluster0.udttf.mongodb.net/';
+// Initialize Express and configure middleware
+//const app = express();
+app.use(express.json());
 
-// Main function to process XML and save to MongoDB
-async function processXMLAndSaveToMongoDB(): Promise<void> {
+// Configure multer for file uploads
+const upload = multer({ dest: 'uploads/' });
+
+// MongoDB connection
+mongoose.connect('mongodb+srv://gururajm1:gururajjj@cluster0.udttf.mongodb.net/user')
+  .then(() => console.log('Connected to MongoDB Atlas'))
+  .catch((error) => console.error('MongoDB connection error:', error));
+
+// Process XML and save to MongoDB
+async function processXMLAndSaveToMongoDB(filePath: string): Promise<void> {
   try {
-    // Connect to MongoDB Atlas with options
-    await mongoose.connect(MONGODB_URI, {
-      // These options are included by default in newer versions of Mongoose
-      // but explicitly stating them for clarity
-     // useNewUrlParser: true,
-   //   useUnifiedTopology: true,
-    });
-    
-    console.log('Connected to MongoDB Atlas');
-
-    // Read XML file
-    const xmlData = await fs.promises.readFile('./data/example.xml', 'utf-8');
-    
-    // Parse XML
+    const xmlData = await fs.promises.readFile(filePath, 'utf-8');
     const parser = new xml2js.Parser({ explicitArray: false });
     const result = await parser.parseStringPromise(xmlData);
-    
+
     const profileResponse = result.INProfileResponse;
-    
     if (!profileResponse) {
       throw new Error('Invalid XML structure: INProfileResponse not found');
     }
 
-    // Extract data
     const currentApplicant = profileResponse.Current_Application?.Current_Application_Details?.Current_Applicant_Details;
     const caisAccounts = profileResponse.CAIS_Account?.CAIS_Account_DETAILS;
     const accountList = Array.isArray(caisAccounts) ? caisAccounts : caisAccounts ? [caisAccounts] : [];
 
-    // Prepare credit report data
     const creditReport: CreditReport = {
       basicInfo: {
         name: `${currentApplicant?.First_Name || ''} ${currentApplicant?.Last_Name || ''}`.trim(),
@@ -128,8 +128,10 @@ async function processXMLAndSaveToMongoDB(): Promise<void> {
         totalAccounts: parseInt(profileResponse.CAIS_Account?.CAIS_Summary?.Credit_Account?.CreditAccountTotal || '0'),
         activeAccounts: parseInt(profileResponse.CAIS_Account?.CAIS_Summary?.Credit_Account?.CreditAccountActive || '0'),
         closedAccounts: parseInt(profileResponse.CAIS_Account?.CAIS_Summary?.Credit_Account?.CreditAccountClosed || '0'),
-        currentBalanceAmount: accountList.reduce((sum: number, account: any) => 
-          sum + parseInt(account.Current_Balance || '0'), 0),
+        currentBalanceAmount: accountList.reduce(
+          (sum: number, account: any) => sum + parseInt(account.Current_Balance || '0'),
+          0
+        ),
         securedAmount: parseInt(profileResponse.CAIS_Account?.CAIS_Summary?.Total_Outstanding_Balance?.Outstanding_Balance_Secured || '0'),
         unsecuredAmount: parseInt(profileResponse.CAIS_Account?.CAIS_Summary?.Total_Outstanding_Balance?.Outstanding_Balance_UnSecured || '0'),
         last7DaysCreditEnquiries: parseInt(profileResponse.CAPS?.CAPS_Summary?.CAPSLast7Days || '0'),
@@ -143,25 +145,45 @@ async function processXMLAndSaveToMongoDB(): Promise<void> {
       })),
     };
 
-    // Save to MongoDB
     const newCreditReport = new CreditReport(creditReport);
     await newCreditReport.save();
     
-    console.log('Credit report saved successfully!');
-    console.log('Document ID:', newCreditReport._id);
-
-    // Optional: Print saved data
-    console.log('\nSaved Credit Report:');
-    console.log(JSON.stringify(creditReport, null, 2));
-
+    // Clean up uploaded file
+    await fs.promises.unlink(filePath);
+    
+    console.log('Credit report saved successfully:', newCreditReport._id);
   } catch (error) {
-    console.error('Error:', error);
-  } finally {
-    // Close MongoDB connection
-    await mongoose.connection.close();
-    console.log('MongoDB connection closed');
+    console.error('Error processing XML:', error);
+    throw error;
   }
 }
 
-// Run the main function
-processXMLAndSaveToMongoDB();
+// Upload endpoint with proper typing
+app.post('/api/upload-xml', upload.single('file'), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (!req.file?.path) {
+      res.status(400).json({ message: 'No file uploaded' });
+      return;
+    }
+
+    await processXMLAndSaveToMongoDB(req.file.path);
+    res.status(200).json({ message: 'File processed and saved successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Error handler
+app.use((error: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('Error:', error);
+  res.status(500).json({ 
+    message: 'Internal server error', 
+    error: error instanceof Error ? error.message : 'Unknown error' 
+  });
+});
+
+// Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
