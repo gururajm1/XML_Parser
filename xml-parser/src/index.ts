@@ -102,7 +102,7 @@ mongoose.connect('mongodb+srv://gururajm1:gururajjj@cluster0.udttf.mongodb.net/u
   .catch((error) => console.error('MongoDB connection error:', error));
 
 // Process XML and save to MongoDB
-async function processXMLAndSaveToMongoDB(filePath: string): Promise<void> {
+async function processXMLAndSaveToMongoDB(filePath: string): Promise<CreditReport> {
   try {
     const xmlData = await fs.promises.readFile(filePath, 'utf-8');
     const parser = new xml2js.Parser({ explicitArray: false });
@@ -152,6 +152,9 @@ async function processXMLAndSaveToMongoDB(filePath: string): Promise<void> {
     await fs.promises.unlink(filePath);
     
     console.log('Credit report saved successfully:', newCreditReport._id);
+
+    // Return the credit report data for the response
+    return creditReport;
   } catch (error) {
     console.error('Error processing XML:', error);
     throw error;
@@ -166,12 +169,44 @@ app.post('/api/upload-xml', upload.single('file'), async (req: Request, res: Res
       return;
     }
 
-    await processXMLAndSaveToMongoDB(req.file.path);
-    res.status(200).json({ message: 'File processed and saved successfully' });
+    // Process XML and save to MongoDB, returning the parsed credit report
+    const creditReport = await processXMLAndSaveToMongoDB(req.file.path);
+
+    // Convert parsed data into stringified objects for sending back
+    const response = {
+      name: creditReport.basicInfo.name,
+      mobilePhone: creditReport.basicInfo.mobilePhone,
+      pan: creditReport.basicInfo.pan,
+      creditScore: creditReport.basicInfo.creditScore,
+      reportSummary: JSON.stringify({
+        totalAccounts: creditReport.summary.totalAccounts,
+        activeAccounts: creditReport.summary.activeAccounts,
+        closedAccounts: creditReport.summary.closedAccounts,
+        currentBalanceAmount: creditReport.summary.currentBalanceAmount,
+        securedAccountsAmount: creditReport.summary.securedAmount,
+        unsecuredAccountsAmount: creditReport.summary.unsecuredAmount,
+        last7DaysCreditEnquiries: creditReport.summary.last7DaysCreditEnquiries,
+      }),
+      creditAccountsInformation: JSON.stringify(creditReport.creditAccounts.map(account => ({
+        creditCards: account.bank,
+        banksOfCreditCards: account.bank,
+        addresses: account.address,
+        accountNumbers: account.accountNumber,
+        amountOverdue: account.amountOverdue,
+        currentBalance: account.currentBalance,
+      }))),
+    };
+
+
+    // Send back the response with stringified objects
+    res.status(200).json(response);
+    console.log(response);
+    console.log("-------------");
   } catch (error) {
     next(error);
   }
 });
+
 
 // Error handler
 app.use((error: any, req: Request, res: Response, next: NextFunction) => {
