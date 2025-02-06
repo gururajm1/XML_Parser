@@ -18,6 +18,7 @@ const multer_1 = __importDefault(require("multer"));
 const fs_1 = __importDefault(require("fs"));
 const xml2js_1 = __importDefault(require("xml2js"));
 const cors_1 = __importDefault(require("cors"));
+const crypto_1 = __importDefault(require("crypto"));
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use((0, cors_1.default)({
@@ -54,6 +55,27 @@ const creditReportSchema = new mongoose_1.default.Schema({
     },
 });
 const CreditReport = mongoose_1.default.model('CreditReport', creditReportSchema);
+// Encryption key and algorithm
+const encryptionKey = crypto_1.default.randomBytes(32); // 256-bit key
+const algorithm = 'aes-256-cbc';
+// Function to encrypt data
+function encrypt(text) {
+    const iv = crypto_1.default.randomBytes(16);
+    const cipher = crypto_1.default.createCipheriv(algorithm, Buffer.from(encryptionKey), iv);
+    let encrypted = cipher.update(text);
+    encrypted = Buffer.concat([encrypted, cipher.final()]);
+    return iv.toString('hex') + ':' + encrypted.toString('hex');
+}
+// Function to decrypt data
+function decrypt(text) {
+    const textParts = text.split(':');
+    const iv = Buffer.from(textParts.shift(), 'hex');
+    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
+    const decipher = crypto_1.default.createDecipheriv(algorithm, Buffer.from(encryptionKey), iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
+}
 const formatAddress = (addressDetails) => {
     if (!addressDetails)
         return 'N/A';
@@ -69,7 +91,6 @@ const formatAddress = (addressDetails) => {
     return components.join(', ');
 };
 // Initialize Express and configure middleware
-//const app = express();
 app.use(express_1.default.json());
 // Configure multer for file uploads
 const upload = (0, multer_1.default)({ dest: 'uploads/' });
@@ -95,8 +116,8 @@ function processXMLAndSaveToMongoDB(filePath) {
             const creditReport = {
                 basicInfo: {
                     name: `${(currentApplicant === null || currentApplicant === void 0 ? void 0 : currentApplicant.First_Name) || ''} ${(currentApplicant === null || currentApplicant === void 0 ? void 0 : currentApplicant.Last_Name) || ''}`.trim(),
-                    mobilePhone: (currentApplicant === null || currentApplicant === void 0 ? void 0 : currentApplicant.MobilePhoneNumber) || 'N/A',
-                    pan: ((_e = (_d = accountList[0]) === null || _d === void 0 ? void 0 : _d.CAIS_Holder_Details) === null || _e === void 0 ? void 0 : _e.Income_TAX_PAN) || 'N/A',
+                    mobilePhone: encrypt((currentApplicant === null || currentApplicant === void 0 ? void 0 : currentApplicant.MobilePhoneNumber) || 'N/A'),
+                    pan: encrypt(((_e = (_d = accountList[0]) === null || _d === void 0 ? void 0 : _d.CAIS_Holder_Details) === null || _e === void 0 ? void 0 : _e.Income_TAX_PAN) || 'N/A'),
                     creditScore: parseInt(((_f = profileResponse.SCORE) === null || _f === void 0 ? void 0 : _f.BureauScore) || '0'),
                 },
                 summary: {
@@ -110,7 +131,7 @@ function processXMLAndSaveToMongoDB(filePath) {
                 },
                 creditAccounts: accountList.map((account) => ({
                     bank: account.Subscriber_Name || 'N/A',
-                    accountNumber: account.Account_Number || 'N/A',
+                    accountNumber: encrypt(account.Account_Number || 'N/A'),
                     amountOverdue: parseInt(account.Amount_Past_Due || '0'),
                     currentBalance: parseInt(account.Current_Balance || '0'),
                     address: formatAddress(account.CAIS_Holder_Address_Details),
@@ -140,34 +161,22 @@ app.post('/api/upload-xml', upload.single('file'), (req, res, next) => __awaiter
         }
         // Process XML and save to MongoDB, returning the parsed credit report
         const creditReport = yield processXMLAndSaveToMongoDB(req.file.path);
-        // Convert parsed data into stringified objects for sending back
-        const response = {
-            name: creditReport.basicInfo.name,
-            mobilePhone: creditReport.basicInfo.mobilePhone,
-            pan: creditReport.basicInfo.pan,
-            creditScore: creditReport.basicInfo.creditScore,
-            reportSummary: JSON.stringify({
-                totalAccounts: creditReport.summary.totalAccounts,
-                activeAccounts: creditReport.summary.activeAccounts,
-                closedAccounts: creditReport.summary.closedAccounts,
-                currentBalanceAmount: creditReport.summary.currentBalanceAmount,
-                securedAccountsAmount: creditReport.summary.securedAmount,
-                unsecuredAccountsAmount: creditReport.summary.unsecuredAmount,
-                last7DaysCreditEnquiries: creditReport.summary.last7DaysCreditEnquiries,
-            }),
-            creditAccountsInformation: JSON.stringify(creditReport.creditAccounts.map(account => ({
-                creditCards: account.bank,
-                banksOfCreditCards: account.bank,
-                addresses: account.address,
-                accountNumbers: account.accountNumber,
-                amountOverdue: account.amountOverdue,
-                currentBalance: account.currentBalance,
-            }))),
+        // Decrypt sensitive data before sending to frontend
+        const decryptedCreditReport = {
+            basicInfo: {
+                name: creditReport.basicInfo.name,
+                mobilePhone: decrypt(creditReport.basicInfo.mobilePhone),
+                pan: decrypt(creditReport.basicInfo.pan),
+                creditScore: creditReport.basicInfo.creditScore,
+            },
+            summary: creditReport.summary,
+            creditAccounts: creditReport.creditAccounts.map(account => (Object.assign(Object.assign({}, account), { accountNumber: decrypt(account.accountNumber) }))),
         };
-        // Send back the response with stringified objects
-        res.status(200).json(response);
-        console.log(response);
-        console.log("-------------");
+        // Convert the data to a string of objects and send it
+        const responseData = JSON.stringify(decryptedCreditReport);
+        // Send back the response with decrypted data as a string of objects
+        res.status(200).json({ data: responseData });
+        console.log(responseData); // Log the stringified data
     }
     catch (error) {
         next(error);

@@ -9,7 +9,6 @@ import * as LabelPrimitive from '@radix-ui/react-label';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 
-
 interface UploadedFile {
   name: string
   size: number
@@ -181,11 +180,11 @@ export default function App() {
                     </div>
                   </div>
                   <button
-                    className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     onClick={() => removeFile(index)}
                   >
                     <span className="sr-only">Remove file</span>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -201,23 +200,60 @@ export default function App() {
         )}
       </div>
 
-      {/* Dialog for parsed data */}
+      {/* Dialog to display parsed data */}
       <DialogPrimitive.Root open={showDialog} onOpenChange={setShowDialog}>
         <DialogPrimitive.Trigger />
-        <DialogPrimitive.Content className="fixed z-50 inset-0 flex items-center justify-center p-4 bg-gray-800 bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
-            <h2 className="text-xl font-semibold text-gray-900">Parsed Data</h2>
-            <div className="mt-4">
-              <p className="text-gray-500">Greatest key from localStorage: {greatestKey}</p>
-              <pre className="mt-4 text-xs text-gray-600 overflow-auto">{JSON.stringify(parsedData, null, 2)}</pre>
+        <DialogPrimitive.Content className="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full sm:w-2/3 md:w-1/2">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Parsed Data</h2>
+              <button onClick={() => setShowDialog(false)} className="text-gray-400 hover:text-gray-500">
+                <span className="sr-only">Close</span>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
             </div>
-            <div className="mt-6 text-right">
+            <div className="overflow-auto max-h-96">
+  {parsedData ? (
+    <div className="space-y-3">
+      {/* Loop through the parsed data */}
+      {Object.entries(parsedData).map(([key, value], index) => {
+        return (
+          <div key={index}>
+            <p className="text-sm font-medium text-gray-700">{key}:</p>
+            {/* If the value is a JSON string, parse it and display it */}
+            {typeof value === 'string' && value.startsWith("{") ? (
+              <pre className="text-sm text-gray-600 whitespace-pre-wrap break-all">{JSON.stringify(JSON.parse(value), null, 4)}</pre>
+            ) : typeof value === 'string' && value.startsWith("[") ? (
+              <pre className="text-sm text-gray-600 whitespace-pre-wrap break-all">{JSON.stringify(JSON.parse(value), null, 4)}</pre>
+            ) : (
+              <p className="text-sm text-gray-600">{value}</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  ) : (
+    <p>No parsed data available</p>
+  )}
+</div>
+
+            <div className="mt-4 flex justify-between items-center">
               <button
+                className="px-4 py-2 text-sm text-white bg-indigo-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 onClick={() => setShowDialog(false)}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
               >
                 Close
               </button>
+              {/* <div>
+                <p className="text-sm text-gray-500">Greatest Key: {greatestKey}</p>
+              </div> */}
             </div>
           </div>
         </DialogPrimitive.Content>
