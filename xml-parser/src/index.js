@@ -22,9 +22,8 @@ const crypto_1 = __importDefault(require("crypto"));
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use((0, cors_1.default)({
-    origin: 'http://localhost:3000' // or your frontend URL
+    origin: 'http://localhost:3000'
 }));
-// MongoDB Schema
 const creditAccountSchema = new mongoose_1.default.Schema({
     bank: String,
     accountNumber: String,
@@ -55,10 +54,8 @@ const creditReportSchema = new mongoose_1.default.Schema({
     },
 });
 const CreditReport = mongoose_1.default.model('CreditReport', creditReportSchema);
-// Encryption key and algorithm
-const encryptionKey = crypto_1.default.randomBytes(32); // 256-bit key
+const encryptionKey = crypto_1.default.randomBytes(32);
 const algorithm = 'aes-256-cbc';
-// Function to encrypt data
 function encrypt(text) {
     const iv = crypto_1.default.randomBytes(16);
     const cipher = crypto_1.default.createCipheriv(algorithm, Buffer.from(encryptionKey), iv);
@@ -66,7 +63,6 @@ function encrypt(text) {
     encrypted = Buffer.concat([encrypted, cipher.final()]);
     return iv.toString('hex') + ':' + encrypted.toString('hex');
 }
-// Function to decrypt data
 function decrypt(text) {
     const textParts = text.split(':');
     const iv = Buffer.from(textParts.shift(), 'hex');
@@ -90,15 +86,11 @@ const formatAddress = (addressDetails) => {
     ].filter((component) => component && component !== '');
     return components.join(', ');
 };
-// Initialize Express and configure middleware
 app.use(express_1.default.json());
-// Configure multer for file uploads
 const upload = (0, multer_1.default)({ dest: 'uploads/' });
-// MongoDB connection
 mongoose_1.default.connect('mongodb+srv://gururajm1:gururajjj@cluster0.udttf.mongodb.net/user')
     .then(() => console.log('Connected to MongoDB Atlas'))
     .catch((error) => console.error('MongoDB connection error:', error));
-// Process XML and save to MongoDB
 function processXMLAndSaveToMongoDB(filePath) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y;
@@ -139,10 +131,8 @@ function processXMLAndSaveToMongoDB(filePath) {
             };
             const newCreditReport = new CreditReport(creditReport);
             yield newCreditReport.save();
-            // Clean up uploaded file
             yield fs_1.default.promises.unlink(filePath);
             console.log('Credit report saved successfully:', newCreditReport._id);
-            // Return the credit report data for the response
             return creditReport;
         }
         catch (error) {
@@ -151,7 +141,6 @@ function processXMLAndSaveToMongoDB(filePath) {
         }
     });
 }
-// Upload endpoint with proper typing
 app.post('/api/upload-xml', upload.single('file'), (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
@@ -159,9 +148,7 @@ app.post('/api/upload-xml', upload.single('file'), (req, res, next) => __awaiter
             res.status(400).json({ message: 'No file uploaded' });
             return;
         }
-        // Process XML and save to MongoDB, returning the parsed credit report
         const creditReport = yield processXMLAndSaveToMongoDB(req.file.path);
-        // Decrypt sensitive data before sending to frontend
         const decryptedCreditReport = {
             basicInfo: {
                 name: creditReport.basicInfo.name,
@@ -172,17 +159,14 @@ app.post('/api/upload-xml', upload.single('file'), (req, res, next) => __awaiter
             summary: creditReport.summary,
             creditAccounts: creditReport.creditAccounts.map(account => (Object.assign(Object.assign({}, account), { accountNumber: decrypt(account.accountNumber) }))),
         };
-        // Convert the data to a string of objects and send it
         const responseData = JSON.stringify(decryptedCreditReport);
-        // Send back the response with decrypted data as a string of objects
         res.status(200).json({ data: responseData });
-        console.log(responseData); // Log the stringified data
+        console.log(responseData);
     }
     catch (error) {
         next(error);
     }
 }));
-// Error handler
 app.use((error, req, res, next) => {
     console.error('Error:', error);
     res.status(500).json({
@@ -190,7 +174,6 @@ app.use((error, req, res, next) => {
         error: error instanceof Error ? error.message : 'Unknown error'
     });
 });
-// Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

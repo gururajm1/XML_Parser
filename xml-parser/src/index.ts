@@ -10,10 +10,9 @@ const app = express();
 app.use(cors());
 
 app.use(cors({
-  origin: 'http://localhost:3000' // or your frontend URL
+  origin: 'http://localhost:3000' 
 }));
 
-// Types
 interface CreditAccount {
   bank: string;
   accountNumber: string;
@@ -41,7 +40,6 @@ interface CreditReport {
   creditAccounts: CreditAccount[];
 }
 
-// MongoDB Schema
 const creditAccountSchema = new mongoose.Schema({
   bank: String,
   accountNumber: String,
@@ -75,11 +73,9 @@ const creditReportSchema = new mongoose.Schema({
 
 const CreditReport = mongoose.model('CreditReport', creditReportSchema);
 
-// Encryption key and algorithm
-const encryptionKey = crypto.randomBytes(32); // 256-bit key
+const encryptionKey = crypto.randomBytes(32); 
 const algorithm = 'aes-256-cbc';
 
-// Function to encrypt data
 function encrypt(text: string): string {
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(algorithm, Buffer.from(encryptionKey), iv);
@@ -88,7 +84,6 @@ function encrypt(text: string): string {
   return iv.toString('hex') + ':' + encrypted.toString('hex');
 }
 
-// Function to decrypt data
 function decrypt(text: string): string {
   const textParts = text.split(':');
   const iv = Buffer.from(textParts.shift()!, 'hex');
@@ -113,18 +108,14 @@ const formatAddress = (addressDetails: any): string => {
   return components.join(', ');
 };
 
-// Initialize Express and configure middleware
 app.use(express.json());
 
-// Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
 
-// MongoDB connection
 mongoose.connect('mongodb+srv://gururajm1:gururajjj@cluster0.udttf.mongodb.net/user')
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch((error) => console.error('MongoDB connection error:', error));
 
-// Process XML and save to MongoDB
 async function processXMLAndSaveToMongoDB(filePath: string): Promise<CreditReport> {
   try {
     const xmlData = await fs.promises.readFile(filePath, 'utf-8');
@@ -171,12 +162,10 @@ async function processXMLAndSaveToMongoDB(filePath: string): Promise<CreditRepor
     const newCreditReport = new CreditReport(creditReport);
     await newCreditReport.save();
     
-    // Clean up uploaded file
     await fs.promises.unlink(filePath);
     
     console.log('Credit report saved successfully:', newCreditReport._id);
 
-    // Return the credit report data for the response
     return creditReport;
   } catch (error) {
     console.error('Error processing XML:', error);
@@ -184,7 +173,6 @@ async function processXMLAndSaveToMongoDB(filePath: string): Promise<CreditRepor
   }
 }
 
-// Upload endpoint with proper typing
 app.post('/api/upload-xml', upload.single('file'), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (!req.file?.path) {
@@ -192,10 +180,8 @@ app.post('/api/upload-xml', upload.single('file'), async (req: Request, res: Res
       return;
     }
 
-    // Process XML and save to MongoDB, returning the parsed credit report
     const creditReport = await processXMLAndSaveToMongoDB(req.file.path);
 
-    // Decrypt sensitive data before sending to frontend
     const decryptedCreditReport = {
       basicInfo: {
         name: creditReport.basicInfo.name,
@@ -210,18 +196,15 @@ app.post('/api/upload-xml', upload.single('file'), async (req: Request, res: Res
       })),
     };
 
-    // Convert the data to a string of objects and send it
     const responseData = JSON.stringify(decryptedCreditReport);
 
-    // Send back the response with decrypted data as a string of objects
     res.status(200).json({ data: responseData });
-    console.log(responseData);  // Log the stringified data
+    console.log(responseData); 
   } catch (error) {
     next(error);
   }
 });
 
-// Error handler
 app.use((error: any, req: Request, res: Response, next: NextFunction) => {
   console.error('Error:', error);
   res.status(500).json({ 
@@ -230,7 +213,6 @@ app.use((error: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-// Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

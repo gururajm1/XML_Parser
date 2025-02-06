@@ -1,6 +1,4 @@
-"use client"
-
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import { FileDrop } from "react-file-drop"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import * as React from "react"
@@ -19,8 +17,9 @@ export default function App() {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [showDialog, setShowDialog] = useState(false)
-  const [parsedData, setParsedData] = useState<any>(null) // State to hold parsed data
-  const [greatestKey, setGreatestKey] = useState<string>("") // State to hold the greatest key
+  const [parsedData, setParsedData] = useState<any>(null) 
+  const [greatestKey, setGreatestKey] = useState<string>("") 
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const onDrop = useCallback((files: FileList | any, event: React.DragEvent) => {
     const filesArray = Array.from(files)
@@ -46,7 +45,6 @@ export default function App() {
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
-  // Function to handle file upload and parsing
   const handleContinue = async () => {
     if (files.length > 0) {
       const file = files[0].file
@@ -60,16 +58,14 @@ export default function App() {
         })
 
         if (response.ok) {
-          // Assuming the server sends the parsed data in the response
           const data = await response.json()
-          setParsedData(data) // Set the parsed data
+          setParsedData(data) 
           alert("File uploaded and processed successfully.")
           
-          // Store parsed data in localStorage with incrementing key
           let currentIndex = localStorage.getItem("index")
           currentIndex = currentIndex ? parseInt(currentIndex) : 0
-          localStorage.setItem("index", (currentIndex + 1).toString()) // Increment index
-          localStorage.setItem((currentIndex + 1).toString(), JSON.stringify(data)) // Store data
+          localStorage.setItem("index", (currentIndex + 1).toString()) 
+          localStorage.setItem((currentIndex + 1).toString(), JSON.stringify(data))
 
           console.log("File uploaded and processed successfully.", data)
         } else {
@@ -83,7 +79,6 @@ export default function App() {
     }
   }
 
-  // Function to get the greatest key from localStorage
   const getGreatestKey = () => {
     let maxKey = -1;
     Object.keys(localStorage).forEach((key) => {
@@ -97,8 +92,23 @@ export default function App() {
     setGreatestKey(maxKey.toString())
   }
 
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = event.target.files
+    if (selectedFiles && selectedFiles.length > 0) {
+      const filesArray = Array.from(selectedFiles)
+
+      const newFiles = filesArray.map((file) => ({
+        name: file.name,
+        size: file.size,
+        file,
+      }))
+
+      setFiles((prev) => [...prev, ...newFiles].slice(0, 5))
+    }
+  }
+
   return (
-    <div className="max-w-3xl mx-auto p-6 mt-1">
+    <div className="max-w-3xl mx-auto p-6 mt-16">
       <div className="bg-white shadow-lg rounded-xl p-8">
         <div className="flex justify-between items-center mb-6">
           <div className="px-3 py-2 text-sm font-medium text-gray-700 bg-white focus:outline-none focus:ring-indigo-500"></div>
@@ -106,7 +116,7 @@ export default function App() {
             <button
               onClick={() => {
                 setShowDialog(true);
-                getGreatestKey(); // Fetch the greatest key when the dialog is opened
+                getGreatestKey();
               }}
               className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
@@ -150,9 +160,19 @@ export default function App() {
             <div className="mt-2">
               <span className="text-sm text-gray-500">OR</span>
             </div>
-            <button className="px-3 py-2 text-sm font-medium text-indigo-600 bg-white border border-indigo-600 rounded-md shadow-sm hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            <button 
+              className="px-3 py-2 text-sm font-medium text-indigo-600 bg-white border border-indigo-600 rounded-md shadow-sm hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              onClick={() => fileInputRef.current?.click()}
+            >
               Browse Files
             </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handleFileInputChange}
+              accept=".xml"
+            />
           </div>
         </FileDrop>
 
@@ -200,7 +220,6 @@ export default function App() {
         )}
       </div>
 
-      {/* Dialog to display parsed data */}
       <DialogPrimitive.Root open={showDialog} onOpenChange={setShowDialog}>
         <DialogPrimitive.Trigger />
         <DialogPrimitive.Content className="fixed inset-0 flex items-center justify-center z-50 p-4">
@@ -220,29 +239,27 @@ export default function App() {
               </button>
             </div>
             <div className="overflow-auto max-h-96">
-  {parsedData ? (
-    <div className="space-y-3">
-      {/* Loop through the parsed data */}
-      {Object.entries(parsedData).map(([key, value], index) => {
-        return (
-          <div key={index}>
-            <p className="text-sm font-medium text-gray-700">{key}:</p>
-            {/* If the value is a JSON string, parse it and display it */}
-            {typeof value === 'string' && value.startsWith("{") ? (
-              <pre className="text-sm text-gray-600 whitespace-pre-wrap break-all">{JSON.stringify(JSON.parse(value), null, 4)}</pre>
-            ) : typeof value === 'string' && value.startsWith("[") ? (
-              <pre className="text-sm text-gray-600 whitespace-pre-wrap break-all">{JSON.stringify(JSON.parse(value), null, 4)}</pre>
-            ) : (
-              <p className="text-sm text-gray-600">{value}</p>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  ) : (
-    <p>No parsed data available</p>
-  )}
-</div>
+              {parsedData ? (
+                <div className="space-y-3">
+                  {Object.entries(parsedData).map(([key, value], index) => {
+                    return (
+                      <div key={index}>
+                        <p className="text-sm font-medium text-gray-700">{key}:</p>
+                        {typeof value === 'string' && value.startsWith("{") ? (
+                          <pre className="text-sm text-gray-600 whitespace-pre-wrap break-all">{JSON.stringify(JSON.parse(value), null, 4)}</pre>
+                        ) : typeof value === 'string' && value.startsWith("[") ? (
+                          <pre className="text-sm text-gray-600 whitespace-pre-wrap break-all">{JSON.stringify(JSON.parse(value), null, 4)}</pre>
+                        ) : (
+                          <p className="text-sm text-gray-600">{value}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p>No parsed data available</p>
+              )}
+            </div>
 
             <div className="mt-4 flex justify-between items-center">
               <button
@@ -251,9 +268,6 @@ export default function App() {
               >
                 Close
               </button>
-              {/* <div>
-                <p className="text-sm text-gray-500">Greatest Key: {greatestKey}</p>
-              </div> */}
             </div>
           </div>
         </DialogPrimitive.Content>
@@ -261,43 +275,3 @@ export default function App() {
     </div>
   )
 }
-
-
-// function Check(props: React.SVGProps<SVGSVGElement>) {
-//   return (
-//     <svg
-//       xmlns="http://www.w3.org/2000/svg"
-//       width="24"
-//       height="24"
-//       viewBox="0 0 24 24"
-//       fill="none"
-//       stroke="currentColor"
-//       strokeWidth="2"
-//       strokeLinecap="round"
-//       strokeLinejoin="round"
-//       {...props}
-//     >
-//       <polyline points="20 6 9 17 4 12" />
-//     </svg>
-//   )
-// }
-
-// function ChevronDown(props: React.SVGProps<SVGSVGElement>) {
-//   return (
-//     <svg
-//       xmlns="http://www.w3.org/2000/svg"
-//       width="24"
-//       height="24"
-//       viewBox="0 0 24 24"
-//       fill="none"
-//       stroke="currentColor"
-//       strokeWidth="2"
-//       strokeLinecap="round"
-//       strokeLinejoin="round"
-//       {...props}
-//     >
-//       <path d="m6 9 6 6 6-6" />
-//     </svg>
-//   )
-// }
-
