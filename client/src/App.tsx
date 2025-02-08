@@ -18,7 +18,6 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false)
   const [showDialog, setShowDialog] = useState(false)
   const [parsedData, setParsedData] = useState<any>(null) 
-  const [greatestKey, setGreatestKey] = useState<string>("") 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const onDrop = useCallback((files: FileList | any, event: React.DragEvent) => {
@@ -62,10 +61,8 @@ export default function App() {
           setParsedData(data) 
           alert("File uploaded and processed successfully.")
           
-          let currentIndex = localStorage.getItem("index")
-          currentIndex = currentIndex ? parseInt(currentIndex) : 0
-          localStorage.setItem("index", (currentIndex + 1).toString()) 
-          localStorage.setItem((currentIndex + 1).toString(), JSON.stringify(data))
+          // Always use the same key "xml" to store the parsed data
+          localStorage.setItem("xml", JSON.stringify(data))
 
           console.log("File uploaded and processed successfully.", data)
         } else {
@@ -77,19 +74,6 @@ export default function App() {
         console.error("Error uploading the file:", error)
       }
     }
-  }
-
-  const getGreatestKey = () => {
-    let maxKey = -1;
-    Object.keys(localStorage).forEach((key) => {
-      if (!isNaN(parseInt(key))) {
-        const currentKey = parseInt(key)
-        if (currentKey > maxKey) {
-          maxKey = currentKey
-        }
-      }
-    })
-    setGreatestKey(maxKey.toString())
   }
 
   const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -114,10 +98,7 @@ export default function App() {
           <div className="px-3 py-2 text-sm font-medium text-gray-700 bg-white focus:outline-none focus:ring-indigo-500"></div>
           <div className="space-x-3">
             <button
-              onClick={() => {
-                setShowDialog(true);
-                getGreatestKey();
-              }}
+              onClick={() => setShowDialog(true)}
               className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               View parsed data
