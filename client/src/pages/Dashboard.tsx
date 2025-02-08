@@ -100,7 +100,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-3xl mx-auto p-6 mt-12">
-      <div className="bg-white shadow-lg rounded-xl p-8 fixed top-2mt-12 left-1/2 transform -translate-x-1/2 w-full max-w-3xl">
+      <div className="bg-white shadow-lg rounded-xl p-8 fixed top-2 mt-12 left-1/2 transform -translate-x-1/2 w-full max-w-3xl">
         <div className="flex justify-between items-center mb-6">
           <div className="px-3 py-2 text-sm font-medium text-gray-700 bg-white focus:outline-none focus:ring-indigo-500"></div>
           <div className="space-x-3">

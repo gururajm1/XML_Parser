@@ -8,9 +8,41 @@ interface ParsedDataPopupProps {
 }
 
 export default function ParsedDataPopup({ showDialog, setShowDialog, parsedData }: ParsedDataPopupProps) {
+  const safeJsonParse = (str: string) => {
+    try {
+      return JSON.parse(str);
+    } catch (error) {
+      console.error("Failed to parse JSON:", error);
+      return str; 
+    }
+  };
+
+  const renderValue = (value: unknown) => {
+    if (typeof value === "string") {
+      if (value.startsWith("{") || value.startsWith("[")) {
+        return (
+          <pre className="text-sm text-gray-600 whitespace-pre-wrap break-all">
+            {JSON.stringify(safeJsonParse(value), null, 4)}
+          </pre>
+        );
+      }
+      return <p className="text-sm text-gray-600">{value}</p>;
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      return <p className="text-sm text-gray-600">{value.toString()}</p>;
+    } else if (value === null || value === undefined) {
+      return <p className="text-sm text-gray-600">null</p>;
+    } else if (typeof value === "object") {
+      return (
+        <pre className="text-sm text-gray-600 whitespace-pre-wrap break-all">
+          {JSON.stringify(value, null, 4)}
+        </pre>
+      );
+    }
+    return <p className="text-sm text-gray-600">Invalid value</p>;
+  };
+
   return (
     <DialogPrimitive.Root open={showDialog} onOpenChange={setShowDialog}>
-      <DialogPrimitive.Trigger />
       <DialogPrimitive.Content className="fixed inset-0 flex items-center justify-center z-50 p-4">
         <div className="bg-white p-6 rounded-lg shadow-lg w-full sm:w-2/3 md:w-1/2">
           <div className="flex justify-between items-center mb-4">
@@ -28,22 +60,14 @@ export default function ParsedDataPopup({ showDialog, setShowDialog, parsedData 
             </button>
           </div>
           <div className="overflow-auto max-h-96">
-            {parsedData ? (
+            {parsedData && typeof parsedData === "object" ? (
               <div className="space-y-3">
-                {Object.entries(parsedData).map(([key, value], index) => {
-                  return (
-                    <div key={index}>
-                      <p className="text-sm font-medium text-gray-700">{key}:</p>
-                      {typeof value === 'string' && value.startsWith("{") ? (
-                        <pre className="text-sm text-gray-600 whitespace-pre-wrap break-all">{JSON.stringify(JSON.parse(value), null, 4)}</pre>
-                      ) : typeof value === 'string' && value.startsWith("[") ? (
-                        <pre className="text-sm text-gray-600 whitespace-pre-wrap break-all">{JSON.stringify(JSON.parse(value), null, 4)}</pre>
-                      ) : (
-                        <p className="text-sm text-gray-600">{value}</p>
-                      )}
-                    </div>
-                  );
-                })}
+                {Object.entries(parsedData).map(([key, value], index) => (
+                  <div key={index}>
+                    <p className="text-sm font-medium text-gray-700">{key}:</p>
+                    {renderValue(value)}
+                  </div>
+                ))}
               </div>
             ) : (
               <p>No parsed data available</p>
